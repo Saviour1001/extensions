@@ -35,16 +35,36 @@ import {
 } from "@solana/spl-token-metadata";
 import bs58 from "bs58";
 
-// consts
-const eclipse_devnet = "https://staging-rpc.dev2.eclipsenetwork.xyz";
-const private_key =
-  "5wa525ff1GscXh3t6Ky3Bhh8UE38F3dFxkxXRkKheAAs4rUwh6ot3tXFAYaxZ9mZM1Q32gWkJA3Hg2tAT5QziiMi";
+// Configuration
+const CONFIG = {
+  // Network
+  RPC_ENDPOINT: "https://staging-rpc.dev2.eclipsenetwork.xyz",
+  PRIVATE_KEY:
+    "5wa525ff1GscXh3t6Ky3Bhh8UE38F3dFxkxXRkKheAAs4rUwh6ot3tXFAYaxZ9mZM1Q32gWkJA3Hg2tAT5QziiMi",
 
-const wallet = Keypair.fromSecretKey(bs58.decode(private_key));
+  // Token Settings
+  DECIMALS: 0, // keep 0 for NFTs
+  MINT_AMOUNT: 500,
+  RECEIVER_ADDRESS: "CtvW2pnB6whzasrRHwPkSqmb7qe8mtEBkvtqTEcM9XNt",
+
+  // NFT Metadata
+  NFT_METADATA: {
+    name: "Mark 1",
+    symbol: "MARK1",
+    uri: "https://uploader.irys.xyz/8LMagECpDj42eX6YrWFQ8r2F3VMt49yjoHwFdrs6nkCT",
+    additionalMetadata: [
+      ["Background", "Blue"],
+      ["Coolness", "100"],
+      ["Sarcasm", "100"],
+    ],
+  },
+};
+
+const wallet = Keypair.fromSecretKey(bs58.decode(CONFIG.PRIVATE_KEY));
 
 console.log("Wallet public key: ", wallet.publicKey.toBase58());
 
-const connection = new Connection(eclipse_devnet, "confirmed");
+const connection = new Connection(CONFIG.RPC_ENDPOINT, "confirmed");
 
 const payer = wallet;
 const authority = wallet;
@@ -52,22 +72,14 @@ const owner = wallet;
 const mintKeypair = Keypair.generate();
 const mint = mintKeypair.publicKey;
 
-const decimals = 0; // keep 0 for NFTs
-const mintAmount = 500;
-
 // NFT Metadata
-
 const tokenMetadata: TokenMetadata = {
   updateAuthority: authority.publicKey,
   mint: mint,
-  name: "Mark 1",
-  symbol: "MARK1",
-  uri: "https://uploader.irys.xyz/8LMagECpDj42eX6YrWFQ8r2F3VMt49yjoHwFdrs6nkCT",
-  additionalMetadata: [
-    ["Background", "Blue"],
-    ["Coolness", "100"],
-    ["Sarcasm", "100"],
-  ],
+  name: CONFIG.NFT_METADATA.name,
+  symbol: CONFIG.NFT_METADATA.symbol,
+  uri: CONFIG.NFT_METADATA.uri,
+  additionalMetadata: CONFIG.NFT_METADATA.additionalMetadata,
 };
 
 function generateExplorerUrl(
@@ -75,7 +87,7 @@ function generateExplorerUrl(
   isAddress: boolean = false
 ): string {
   if (!identifier) return "";
-  const baseUrl = "https://eclipsescan.xyz/";
+  const baseUrl = "https://eclipsescan.xyz";
   const localSuffix = "?cluster=devnet";
   const slug = isAddress ? "account" : "tx";
   return `${baseUrl}/${slug}/${identifier}${localSuffix}`;
@@ -141,7 +153,7 @@ async function createTokenAndMint(): Promise<[string, string]> {
     ),
     createInitializeMintInstruction(
       mint,
-      decimals,
+      CONFIG.DECIMALS,
       authority.publicKey,
       null,
       TOKEN_2022_PROGRAM_ID
@@ -179,8 +191,6 @@ async function createTokenAndMint(): Promise<[string, string]> {
     })
   );
 
-  console.log("Transaction", transaction);
-
   // Initialize NFT with metadata
   const initSig = await sendAndConfirmTransaction(connection, transaction, [
     payer,
@@ -207,7 +217,7 @@ async function createTokenAndMint(): Promise<[string, string]> {
     mint,
     sourceAccount,
     authority,
-    mintAmount,
+    CONFIG.MINT_AMOUNT,
     [],
     undefined,
     TOKEN_2022_PROGRAM_ID
