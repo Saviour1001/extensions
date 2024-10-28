@@ -9,6 +9,7 @@ import {
   TransactionSignature,
   SignatureStatus,
   TransactionConfirmationStatus,
+  PublicKey,
 } from "@solana/web3.js";
 import {
   TOKEN_2022_PROGRAM_ID,
@@ -45,7 +46,7 @@ const CONFIG = {
   // Token Settings
   DECIMALS: 0, // keep 0 for NFTs
   MINT_AMOUNT: 500,
-  RECEIVER_ADDRESS: "CtvW2pnB6whzasrRHwPkSqmb7qe8mtEBkvtqTEcM9XNt",
+  RECEIVER_ADDRESS: "5TJQVLar32DYk1BrTRnhVSbC2vKgcNL57kSwkb5XWr1K",
 
   // NFT Metadata
   NFT_METADATA: {
@@ -74,7 +75,7 @@ const mint = mintKeypair.publicKey;
 
 // NFT Metadata
 const tokenMetadata: TokenMetadata = {
-  updateAuthority: authority.publicKey,
+  updateAuthority: new PublicKey(CONFIG.RECEIVER_ADDRESS),
   mint: mint,
   name: CONFIG.NFT_METADATA.name,
   symbol: CONFIG.NFT_METADATA.symbol,
@@ -121,6 +122,12 @@ async function main() {
     // Log New NFT
     console.log(`New NFT:`);
     console.log(`   ${generateExplorerUrl(mint.toBase58(), true)}`);
+
+    // 2. Remove Token Authority
+    console.log("Removing token authority");
+    const removeSig = await removeTokenAuthority();
+    console.log(`Token authority removed:`);
+    console.log(`   ${generateExplorerUrl(removeSig)}`);
   } catch (err) {
     console.error(err);
   }
@@ -174,20 +181,6 @@ async function createTokenAndMint(): Promise<[string, string]> {
       updateAuthority: authority.publicKey,
       field: tokenMetadata.additionalMetadata[0][0],
       value: tokenMetadata.additionalMetadata[0][1],
-    }),
-    createUpdateFieldInstruction({
-      programId: TOKEN_2022_PROGRAM_ID,
-      metadata: mint,
-      updateAuthority: authority.publicKey,
-      field: tokenMetadata.additionalMetadata[1][0],
-      value: tokenMetadata.additionalMetadata[1][1],
-    }),
-    createUpdateFieldInstruction({
-      programId: TOKEN_2022_PROGRAM_ID,
-      metadata: mint,
-      updateAuthority: authority.publicKey,
-      field: tokenMetadata.additionalMetadata[2][0],
-      value: tokenMetadata.additionalMetadata[2][1],
     })
   );
 
@@ -226,78 +219,16 @@ async function createTokenAndMint(): Promise<[string, string]> {
   return [initSig, mintSig];
 }
 
-async function removeMetadataField() {
-  const transaction = new Transaction().add(
-    createRemoveKeyInstruction({
-      programId: TOKEN_2022_PROGRAM_ID,
-      metadata: mint,
-      updateAuthority: authority.publicKey,
-      key: "WrongData",
-      idempotent: true,
-    })
-  );
-  const signature = await sendAndConfirmTransaction(connection, transaction, [
-    payer,
-    authority,
-  ]);
-  return signature;
-}
-
 async function removeTokenAuthority(): Promise<string> {
   const transaction = new Transaction().add(
     createSetAuthorityInstruction(
       mint,
       authority.publicKey,
       AuthorityType.MintTokens,
-      null,
+      new PublicKey(CONFIG.RECEIVER_ADDRESS),
       [],
       TOKEN_2022_PROGRAM_ID
     )
-  );
-  return await sendAndConfirmTransaction(connection, transaction, [
-    payer,
-    authority,
-  ]);
-}
-
-async function incrementPoints(pointsToAdd: number = 1) {
-  // Retrieve mint information
-  const mintInfo = await getMint(
-    connection,
-    mint,
-    "confirmed",
-    TOKEN_2022_PROGRAM_ID
-  );
-
-  const metadataPointer = getMetadataPointerState(mintInfo);
-
-  if (!metadataPointer || !metadataPointer.metadataAddress) {
-    throw new Error("No metadata pointer found");
-  }
-
-  const metadata = await getTokenMetadata(
-    connection,
-    metadataPointer?.metadataAddress
-  );
-
-  if (!metadata) {
-    throw new Error("No metadata found");
-  }
-  if (metadata.mint.toBase58() !== mint.toBase58()) {
-    throw new Error("Metadata does not match mint");
-  }
-  const [key, currentPoints] =
-    metadata.additionalMetadata.find(([key, _]) => key === "Points") ?? [];
-  let pointsAsNumber = parseInt(currentPoints ?? "0");
-  pointsAsNumber += pointsToAdd;
-  const transaction = new Transaction().add(
-    createUpdateFieldInstruction({
-      programId: TOKEN_2022_PROGRAM_ID,
-      metadata: mint,
-      updateAuthority: authority.publicKey,
-      field: "Points",
-      value: pointsAsNumber.toString(),
-    })
   );
   return await sendAndConfirmTransaction(connection, transaction, [
     payer,
